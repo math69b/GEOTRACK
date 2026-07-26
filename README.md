@@ -154,6 +154,4 @@ geotrack/
 
 Esta ferramenta é destinada exclusivamente para testes de segurança autorizados e engagements de red team com consentimento. O uso indevido é de responsabilidade do operador.
 
-## Licença
 
-MIT
