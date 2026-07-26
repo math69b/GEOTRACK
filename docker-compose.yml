@@ -1,0 +1,12 @@
+services:
+  geotrack:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - GEOTRACK_DB=/app/data/geotrack.db
+      - TELEGRAM_TOKEN=
+      - TELEGRAM_CHAT_ID=
+    restart: unless-stopped
